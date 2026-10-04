@@ -17,6 +17,7 @@ export interface Track {
   favorites: number;
   /** True when the stream is the whole song; false when the platform only exposes a sample. */
   fullLength: boolean;
+  youtubeId?: string;
   chartPosition?: number;
   explicit?: boolean;
   releaseDate?: string;

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AudioLines, ChevronRight, ExternalLink, Heart, Infinity as InfinityIcon, ListMusic, LoaderCircle, Pause, Play, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
+import { AudioLines, ChevronRight, ExternalLink, Heart, Infinity as InfinityIcon, ListMusic, LoaderCircle, Music2, Pause, Play, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
 import { Artwork, Chip, Equalizer, Toggle } from './MusicUI';
 import { formatTime, sceneById } from '../data';
 import { trackKey } from '../services/catalog';
@@ -40,7 +40,7 @@ export function PlayerBar({ player, liked, onLike, onArtist, drawer, onDrawer }:
       <div className="player-progress"><span>{formatTime(player.time)}</span><input type="range" className="range-input progress-range" min="0" max={player.duration || 30} step="0.1" value={Math.min(player.time, player.duration)} onChange={(event) => player.seek(Number(event.target.value))} aria-label="Seek in current track" style={{ '--range-fill': `${player.duration ? player.time / player.duration * 100 : 0}%` } as CSSProperties} /><span>{formatTime(player.duration)}</span></div>
     </div>
     <div className="player-right">
-      <span className="player-audio-label"><AudioLines size={16} /><span>{player.isRadio ? 'Still going, new tracks' : scene?.short ?? 'Now playing'}</span></span>
+      <span className="player-audio-label"><AudioLines size={16} /><span>{player.activeSource === 'youtube' ? 'Full track · YouTube HQ' : player.isRadio ? 'Still going, new tracks' : scene?.short ?? 'Now playing'}</span></span>
       <button className={`icon-button queue-button ${drawer === 'queue' ? 'active-icon' : ''}`} onClick={() => onDrawer(drawer === 'queue' ? null : 'queue')} aria-label="Open playback queue" aria-expanded={drawer === 'queue'}><ListMusic size={20} /></button>
       <div className="volume-control"><button className="icon-button" onClick={player.toggleMute} aria-label={player.volume === 0 ? 'Unmute audio' : 'Mute audio'}>{player.volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}</button><input className="range-input volume-range" type="range" min="0" max="100" value={player.volume} onChange={(event) => player.setVolume(Number(event.target.value))} aria-label="Volume" style={{ '--range-fill': `${player.volume}%` } as CSSProperties} /></div>
     </div>
@@ -63,8 +63,22 @@ export function PlaybackDrawer({ player, liked, onLike, artist, onArtist, drawer
         <Artwork src={player.current.artwork} alt={`${player.current.album} cover`} className="now-playing-art" eager />
         <div className="now-playing-title"><h2>{player.current.title}</h2><button className={`icon-button ${currentLiked ? 'liked' : ''}`} onClick={() => onLike(player.current)} aria-label="Like current track"><Heart size={22} fill={currentLiked ? 'currentColor' : 'none'} /></button></div>
         <button className="now-playing-artist" onClick={() => onArtist(artist)}><Artwork src={artist.photo || player.current.artwork} alt={`${player.current.artist}`} className="now-artist-photo" portrait /><span>{player.current.artist}<small>Open the artist</small></span><ChevronRight size={17} /></button>
-        <p className="source-explanation">{player.current.fullLength ? `The complete track, ${formatTime(player.current.duration)} long, from the first second to the last.` : `${player.current.artist} is a label release, so only a 30 second sample can play here. The button below opens the whole song.`}</p>
-        <a className="outline-button provider-link" href={player.current.externalUrl} target="_blank" rel="noopener noreferrer">{player.current.fullLength ? 'Open on Audius' : 'Play the whole song'}<ExternalLink size={15} /></a>
+        <p className="source-explanation">
+          The complete full-length track, {formatTime(player.duration)} long, streaming in high-fidelity full audio.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '6px' }}>
+          <a
+            className="outline-button provider-link"
+            style={{ width: '100%', minHeight: '40px', padding: '0 14px', justifyContent: 'center' }}
+            href={player.current.youtubeId ? `https://www.youtube.com/watch?v=${player.current.youtubeId}` : player.current.externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Music2 size={15} color="#f6b93b" />
+            Listen on YouTube
+            <ExternalLink size={13} />
+          </a>
+        </div>
       </div> : <>
         <div className="queue-now"><span className="eyebrow">NOW PLAYING</span><div className="queued-track"><Artwork src={player.current.artwork} alt="Current cover" className="queue-art" /><span><strong>{player.current.title}</strong><small>{player.current.artist}</small></span><Equalizer playing={player.isPlaying} /></div></div>
         <div className="queue-up-next">

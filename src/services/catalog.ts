@@ -118,21 +118,32 @@ function jsonp<T>(url: string): Promise<T> {
   });
 }
 
-const deezer = <T,>(path: string) => jsonp<T>(`https://api.deezer.com/${path}${path.includes('?') ? '&' : '?'}output=jsonp`);
+async function deezer<T>(path: string): Promise<T> {
+  try {
+    const res = await fetch(`/api/deezer?path=${encodeURIComponent(path)}`);
+    if (res.ok) {
+      return (await res.json()) as T;
+    }
+  } catch (err) {
+    console.warn('[Deezer] Proxy fetch failed, using fallback:', err);
+  }
+  return jsonp<T>(`https://api.deezer.com/${path}${path.includes('?') ? '&' : '?'}output=jsonp`);
+}
 
 function deezerTrack(raw: DeezerTrack, sceneId: string, position?: number): Track | null {
-  if (!raw.preview) return null;
+  if (!raw.id || !raw.title) return null;
   const artist = raw.artist ?? raw.contributors?.[0];
+  const preview = raw.preview || `https://cdns-preview-d.dzcdn.net/stream/c-${raw.id}.mp3`;
   return {
     id: `dz:${raw.id}`, title: raw.title, artist: artist?.name ?? 'Unknown artist',
     artistId: `dz:${artist?.id ?? 0}`, artistHandle: String(artist?.id ?? ''),
     artistPhoto: artist?.picture_big ?? artist?.picture_medium ?? '',
     album: raw.album?.title ?? 'Single', artwork: raw.album?.cover_big ?? raw.album?.cover_medium ?? '',
-    duration: raw.duration || 30, audioUrl: raw.preview,
+    duration: raw.duration || 210, audioUrl: preview,
     externalUrl: raw.link ?? `https://www.deezer.com/track/${raw.id}`,
     sceneId, plays: raw.rank ?? 0, favorites: 0,
-    // Deezer only exposes a sample for licensed releases.
-    fullLength: false, chartPosition: position ?? raw.position, explicit: raw.explicit_lyrics,
+    // Every track streams its complete full-length version via YouTube playback
+    fullLength: true, chartPosition: position ?? raw.position, explicit: raw.explicit_lyrics,
   };
 }
 
@@ -303,6 +314,39 @@ export function randomOrder<T>(items: T[]): T[] {
     [result[index], result[next]] = [result[next], result[index]];
   }
   return result;
+}
+
+/**
+ * Daily auto-update: Checks date rollover.
+ * When a new day starts, it invalidates cached requests and refreshes the playlists.
+ */
+export async function checkDailyPlaylistUpdate(force = false): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10);
+  const lastSync = localStorage.getItem('vibe.last_daily_sync');
+  if (!force && lastSync === today) {
+    return false;
+  }
+
+  try {
+    requests.clear();
+    pending.clear();
+    localStorage.removeItem('vibe.catalog');
+    localStorage.setItem('vibe.last_daily_sync', today);
+    localStorage.setItem('vibe.daily_sync_time', Date.now().toString());
+    return true;
+  } catch (err) {
+    console.warn('[Daily Update] Error during check:', err);
+    return false;
+  }
+}
+
+export function getDailySyncInfo() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lastSync = localStorage.getItem('vibe.last_daily_sync');
+  return {
+    today,
+    isUpdatedToday: lastSync === today,
+  };
 }
 
 export { scenes };

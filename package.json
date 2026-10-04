@@ -1,18 +1,20 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "vibe",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
+    "start": "tsx server.ts",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^7.6.9",
-    "@capacitor/core": "^8.5.2",
+    "@distube/ytdl-core": "^4.16.12",
     "clsx": "2.1.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "framer-motion": "^13.4.6",
     "lucide-react": "^1.49.0",
     "react": "19.2.6",
@@ -21,11 +23,14 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
     "tailwindcss": "4.1.17",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vite": "7.3.2",
     "vite-plugin-singlefile": "2.3.0"

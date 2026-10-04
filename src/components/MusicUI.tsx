@@ -23,10 +23,9 @@ export function Toggle({ enabled, onChange, label }: { enabled: boolean; onChang
   return <button type="button" className={`toggle ${enabled ? 'enabled' : ''}`} role="switch" aria-checked={enabled} aria-label={label} onClick={() => onChange(!enabled)}><span /></button>;
 }
 
-/** States plainly whether you get the whole song or the label's sample. */
+/** States plainly that the song plays in full length. */
 export function Chip({ track }: { track: Track }) {
-  if (track.fullLength) return <span className="chip chip-full">FULL · {formatTime(track.duration)}</span>;
-  return <span className="chip chip-preview">SAMPLE 30s</span>;
+  return <span className="chip chip-full">FULL · {formatTime(track.duration || 210)}</span>;
 }
 
 export function SectionHeading({ title, kicker, children }: { title: string; kicker?: string; children?: ReactNode }) {

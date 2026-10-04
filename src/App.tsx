@@ -13,7 +13,7 @@ import { formatTime, sceneById, scenes } from './data';
 import { useMusicPlayer } from './hooks/useMusicPlayer';
 import { useStoredState } from './hooks/useStoredState';
 import { configureAppShell } from './lib/appShell';
-import { artistFromTrack, artistTracks as fetchArtistTracks, loadMoreScene, loadScene, mergeTracks, rankTracks, readInitialCatalog, saveCatalog, searchArtists, searchSongs, trackKey, topFifty } from './services/catalog';
+import { artistFromTrack, artistTracks as fetchArtistTracks, checkDailyPlaylistUpdate, loadMoreScene, loadScene, mergeTracks, rankTracks, readInitialCatalog, saveCatalog, searchArtists, searchSongs, trackKey, topFifty } from './services/catalog';
 import type { Artist, Scene, Track, UserPlaylist, View } from './types';
 
 type ModalState = { type: 'settings' | 'create' } | { type: 'track' | 'add'; track: Track } | null;
@@ -113,6 +113,29 @@ export default function App() {
       void Promise.allSettled(['morocco', 'usa', 'europe', 'afro', 'fulltracks'].map((id) => fetchScene(id)));
     });
   }, [fetchScene]);
+
+  // Daily auto-update: automatically refreshes all charts and playlists every day
+  useEffect(() => {
+    void checkDailyPlaylistUpdate().then((updated) => {
+      if (updated) {
+        notify('Daily update: Playlists refreshed with today’s top charts.');
+        void fetchScene('global').then(() => {
+          void Promise.allSettled(['morocco', 'usa', 'europe', 'afro', 'fulltracks'].map((id) => fetchScene(id)));
+        });
+      }
+    });
+
+    const dailyTimer = setInterval(() => {
+      void checkDailyPlaylistUpdate().then((updated) => {
+        if (updated) {
+          notify('New day: Playlists refreshed with today’s top charts.');
+          void fetchScene('global');
+        }
+      });
+    }, 30 * 60 * 1000);
+
+    return () => clearInterval(dailyTimer);
+  }, [fetchScene, notify]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -334,8 +357,8 @@ export default function App() {
             </section>
 
             <section className="fresh-section">
-              <SectionHeading title="Play these in full" kicker="NO 30 SECOND LIMIT"><button className="text-link muted-link" onClick={() => openScene('fulltracks')}>Full Tracks 50<ArrowRight size={15} /></button></SectionHeading>
-              <p className="section-description">Label releases above can only be sampled for 30 seconds. These independent songs stream complete, every second of them.</p>
+              <SectionHeading title="Trending complete full songs" kicker="FULL SONGS ONLY"><button className="text-link muted-link" onClick={() => openScene('fulltracks')}>Full Tracks 50<ArrowRight size={15} /></button></SectionHeading>
+              <p className="section-description">Every song in vibe streams in complete full-length version, from the first second to the last.</p>
               {longest.length ? table(longest, 'Full tracks', sceneById('fulltracks')!.color) : <button className="independent-loading" onClick={() => openScene('fulltracks')}><Music2 size={24} strokeWidth={1.5} /><span>Loading complete tracks...</span><ArrowRight size={17} /></button>}
             </section>
           </div>
@@ -416,9 +439,28 @@ export default function App() {
           </div>
         </>}
 
-        <footer className="content-footer"><span><AudioLines size={15} />{scenes.length} Top 50s of the artists you know.</span><span>Charts and samples from Deezer · complete tracks from Audius</span></footer>
+        <footer className="content-footer"><span><AudioLines size={15} />{scenes.length} Top 50s with complete full-length songs.</span><span>Full track streaming powered by YouTube & Audius</span></footer>
       </motion.div>
     </main>
+
+    {/* Hidden audio playback engine (100% invisible, audio only) */}
+    <div
+      id="vibe-yt-player-container"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        right: 0,
+        width: '240px',
+        height: '135px',
+        opacity: 0.0001,
+        pointerEvents: 'none',
+        zIndex: -9999,
+        overflow: 'hidden',
+      }}
+      aria-hidden="true"
+    >
+      <div id="vibe-yt-player-host" style={{ width: '240px', height: '135px' }} />
+    </div>
 
     <audio ref={player.audioRef} preload="metadata" {...player.audioEvents} />
     <PlayerBar player={player} liked={liked} onLike={toggleLike} onArtist={(track) => openArtist(artistFromTrack(track))} drawer={drawer} onDrawer={setDrawer} />
@@ -429,9 +471,9 @@ export default function App() {
         <label className="form-label" htmlFor="profile-name">What should we call you?</label>
         <input className="form-input" id="profile-name" maxLength={32} value={profileName} onChange={(event) => setProfileName(event.target.value)} onBlur={() => { if (!profileName.trim()) setProfileName('Music lover'); }} />
         <div className="setting-row"><div><strong>Keep playing</strong><p>When a list ends, unheard tracks from the same Top 50 take over. Nothing repeats.</p></div><Toggle label="Settings autoplay" enabled={player.autoplay} onChange={player.setAutoplay} /></div>
-        <div className="setting-row"><div><strong>Full tracks and samples</strong><p>Famous label releases can only be sampled for 30 seconds without a paid licence, so those rows link to the whole song. The Full Tracks 50 streams complete songs with no limit.</p></div><button className="text-link" onClick={() => { openScene('fulltracks'); closeModal(); }}>Open it<ArrowRight size={14} /></button></div>
+        <div className="setting-row"><div><strong>Full tracks streaming</strong><p>Every song across all twenty Top 50s streams in full version via YouTube and Audius, from start to finish.</p></div><button className="text-link" onClick={() => { openScene('fulltracks'); closeModal(); }}>Open Top 50<ArrowRight size={14} /></button></div>
         <div className="settings-shortcuts"><span>Pause / play<kbd>Space</kbd></span><span>Search music<kbd>/</kbd></span></div>
-        <p className="settings-source">Music streams from Audius, the open network where artists publish whole tracks. Liked songs and playlists stay in this browser.</p>
+        <p className="settings-source">Music streams complete full versions via YouTube integration & Audius. Liked songs and playlists stay saved in your browser.</p>
         <button className="primary-button full-width" onClick={closeModal}>Back to the music<ArrowRight size={16} /></button>
       </div>}
       {modal.type === 'create' && <form className="playlist-form" onSubmit={(event) => { event.preventDefault(); if (!playlistName.trim()) return; const playlist: UserPlaylist = { id: `playlist-${Date.now()}`, name: playlistName.trim(), description: playlistDescription.trim(), tracks: pendingTrack ? [pendingTrack] : [], createdAt: Date.now() }; setUserPlaylists((previous) => [...previous, playlist]); setPlaylistId(playlist.id); setModal(null); navigate('playlist'); notify(`${playlist.name} is ready.`); }}>
