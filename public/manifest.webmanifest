@@ -1,0 +1,24 @@
+{
+  "name": "AGHANI — full tracks, twenty Top 50s",
+  "short_name": "AGHANI",
+  "description": "Twenty Top 50s of complete tracks, a local taste engine and new music refreshed every day. Never a preview.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#080c1c",
+  "theme_color": "#080c1c",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New music", "short_name": "New", "url": "/?view=new" },
+    { "name": "Global Top 50", "short_name": "Global", "url": "/?scene=global" },
+    { "name": "Morocco Top 50", "short_name": "Morocco", "url": "/?scene=morocco" }
+  ]
+}

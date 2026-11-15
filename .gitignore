@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# local Android toolchain (JDK + Gradle + SDK), rebuilt on demand
+.toolchain/
+
+# build output
+dist/
+build/
+.vite/
+
+# local env and secrets
+.env
+.env.local
+.env.*.local
+
+# logs and OS noise
+*.log
+.DS_Store
