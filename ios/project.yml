@@ -1,0 +1,48 @@
+name: VibeApp
+options:
+  bundleIdPrefix: com.vibe
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.8.8"
+    CURRENT_PROJECT_VERSION: "24"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  VibeApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: VibeApp
+        excludes:
+          - Web
+    resources:
+      - path: VibeApp/Web
+        type: folder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibe.app
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: VibeApp/Info.plist
+      properties:
+        CFBundleDisplayName: vibe
+        CFBundleShortVersionString: "1.8.8"
+        CFBundleVersion: "24"
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - audio
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoadsForMedia: true
+          NSExceptionDomains:
+            "127.0.0.1":
+              NSExceptionAllowsInsecureHTTPLoads: true
+              NSIncludesSubdomains: false

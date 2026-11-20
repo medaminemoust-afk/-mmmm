@@ -1,0 +1,82 @@
+name: ios ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ios-build
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      # The site is committed inside ios/VibeApp/Web, exactly as it was validated on the
+      # Android build, so the IPA is built from a fixed bundle instead of a fresh npm install.
+      - name: Check the bundled site
+        run: |
+          test -f ios/VibeApp/Web/index.html || { echo "ios/VibeApp/Web/index.html is missing"; exit 1; }
+          du -sh ios/VibeApp/Web
+
+      # The app icon is the same artwork the web bundle uses; sips scales it to the 1024 size
+      # an AppIcon set needs, so no second copy has to be kept in the repository.
+      - name: App icon
+        run: |
+          ICONSET=ios/VibeApp/Assets.xcassets/AppIcon.appiconset
+          sips -z 1024 1024 ios/VibeApp/Web/icon-512.png --out "$ICONSET/icon-1024.png"
+          sips -g pixelWidth -g pixelHeight "$ICONSET/icon-1024.png"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        run: cd ios && xcodegen generate
+
+      - name: Build unsigned
+        run: |
+          cd ios
+          xcodebuild archive \
+            -project VibeApp.xcodeproj \
+            -scheme VibeApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/VibeApp.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package the IPA
+        run: |
+          cd ios
+          rm -rf build/Payload vibe-unsigned.ipa
+          mkdir -p build/Payload
+          cp -R build/VibeApp.xcarchive/Products/Applications/VibeApp.app build/Payload/
+          cd build
+          zip -qry ../vibe-unsigned.ipa Payload
+          ls -l ../vibe-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vibe-ios-unsigned
+          path: ios/vibe-unsigned.ipa
+          if-no-files-found: error
+
+      # A public release asset can be downloaded from the download page without a GitHub token.
+      - name: Publish the IPA as a release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ios
+          TAG="ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" vibe-unsigned.ipa \
+            --repo "${{ github.repository }}" \
+            --title "vibe iOS unsigned IPA ($TAG)" \
+            --notes "Unsigned IPA built from ${{ github.sha }}. Install with Sideloadly and a free Apple ID." \
+            --latest
+          echo "asset: https://github.com/${{ github.repository }}/releases/download/$TAG/vibe-unsigned.ipa"
