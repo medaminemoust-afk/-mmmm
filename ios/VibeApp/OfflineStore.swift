@@ -50,12 +50,12 @@ enum OfflineStore {
     /// Downloads a whole stream. Completion runs on the main queue with the bridge's JSON answer.
     static func download(url: String, key: String, metaJSON: String, completion: @escaping (String) -> Void) {
         guard let source = URL(string: url), !url.isEmpty else {
-            completion(error("no audio url to download"))
+            completion(failure("no audio url to download"))
             return
         }
         let safe = safeKey(key)
         guard !safe.isEmpty else {
-            completion(error("bad track key"))
+            completion(failure("bad track key"))
             return
         }
 
@@ -63,15 +63,15 @@ enum OfflineStore {
         request.setValue("vibe/1.8 (iOS; offline cache)", forHTTPHeaderField: "User-Agent")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
 
-        URLSession.shared.downloadTask(with: request) { temporary, response, failure in
+        URLSession.shared.downloadTask(with: request) { temporary, response, problem in
             guard let temporary else {
-                completion(error("download failed: \(failure?.localizedDescription ?? "no answer")"))
+                completion(failure("download failed: \(problem?.localizedDescription ?? "no answer")"))
                 return
             }
             let http = response as? HTTPURLResponse
             let status = http?.statusCode ?? 0
             guard status == 200 || status == 206 else {
-                completion(error("download HTTP \(status)"))
+                completion(failure("download HTTP \(status)"))
                 return
             }
             var mime = http?.value(forHTTPHeaderField: "Content-Type") ?? "audio/mp4"
@@ -84,7 +84,7 @@ enum OfflineStore {
             guard bytes >= 100_000 else {
                 // A truncated fragment plays ten seconds and stops: better to save nothing.
                 try? FileManager.default.removeItem(at: temporary)
-                completion(error("the stream stopped after \(bytes) bytes"))
+                completion(failure("the stream stopped after \(bytes) bytes"))
                 return
             }
 
@@ -93,7 +93,7 @@ enum OfflineStore {
             do {
                 try FileManager.default.moveItem(at: temporary, to: target)
             } catch {
-                completion(error("download failed: \(error.localizedDescription)"))
+                completion(failure("download failed: \(error.localizedDescription)"))
                 return
             }
             for other in [".m4a", ".webm", ".ogg", ".mp3"] where other != ext {
@@ -178,7 +178,7 @@ enum OfflineStore {
         return file
     }
 
-    private static func error(_ message: String) -> String {
+    private static func failure(_ message: String) -> String {
         json(["error": message])
     }
 
