@@ -18,7 +18,7 @@ targets:
       - path: VibeApp
         excludes:
           - Web
-    resources:
+      # A folder reference, so the whole built site lands in the bundle as VibeApp.app/Web.
       - path: VibeApp/Web
         type: folder
     settings:

@@ -72,6 +72,9 @@ jobs:
       - name: Package the IPA
         run: |
           cd ios
+          APP=build/VibeApp.xcarchive/Products/Applications/VibeApp.app
+          test -f "$APP/Web/index.html" || { echo "the bundled site is missing from $APP"; ls -R "$APP" | head -40; exit 1; }
+          du -sh "$APP/Web"
           rm -rf build/Payload vibe-unsigned.ipa
           mkdir -p build/Payload
           cp -R build/VibeApp.xcarchive/Products/Applications/VibeApp.app build/Payload/
