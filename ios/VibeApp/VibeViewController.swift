@@ -48,8 +48,8 @@ final class VibeViewController: UIViewController, WKScriptMessageHandler {
     private static let bridgeSource = """
     window.__vibePlatform = 'ios';
     window.VibeNative = {
-      searchYouTube: function (artist, title, id) {
-        window.webkit.messageHandlers.vibe.postMessage({ method: 'searchYouTube', args: [artist, title], id: id });
+      searchYouTube: function (artist, title, seconds, id) {
+        window.webkit.messageHandlers.vibe.postMessage({ method: 'searchYouTube', args: [artist, title, String(seconds || '')], id: id });
       },
       resolveStream: function (videoId, id) {
         window.webkit.messageHandlers.vibe.postMessage({ method: 'resolveStream', args: [videoId], id: id });
@@ -80,10 +80,12 @@ final class VibeViewController: UIViewController, WKScriptMessageHandler {
         switch method {
         case "searchYouTube":
             let query = "\(text(0)) \(text(1)) official audio"
+            // The page knows how long the song really is; YouTube results are ranked against it.
+            let expected = Int(text(2)) ?? 0
             work {
-                var answer = InnerTube.shared.searchJSON(query)
+                var answer = InnerTube.shared.searchJSON(query, expectedSeconds: expected)
                 if answer.contains("\"error\"") {
-                    answer = InnerTube.shared.searchJSON("\(text(0)) \(text(1))")
+                    answer = InnerTube.shared.searchJSON("\(text(0)) \(text(1))", expectedSeconds: expected)
                 }
                 self.deliver(callbackId, answer)
             }

@@ -1,3 +1,5 @@
+import { hasNativeYouTube, nativeSearchVideoId } from './nativeBridge';
+
 interface YouTubeResult {
   videoId: string;
   title: string;
@@ -7,6 +9,10 @@ interface YouTubeResult {
 
 const memoryCache = new Map<string, YouTubeResult>();
 const pendingResolves = new Map<string, Promise<YouTubeResult | null>>();
+
+/** Why the last resolution failed, shown in the playback diagnostics. */
+let lastError: string | null = null;
+export const getLastResolveError = () => lastError;
 
 function getCacheKey(artist: string, title: string): string {
   const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim();
@@ -40,8 +46,11 @@ function persistCache() {
 
 /**
  * Resolves a full-length YouTube video for an artist and title.
+ *
+ * The expected length is handed to the phone's own resolver, so a 4:03 song cannot land on an
+ * 8 minute upload of something else.
  */
-export async function resolveYouTubeTrack(artist: string, title: string): Promise<YouTubeResult | null> {
+export async function resolveYouTubeTrack(artist: string, title: string, durationSeconds?: number): Promise<YouTubeResult | null> {
   const key = getCacheKey(artist, title);
   const cached = memoryCache.get(key);
   if (cached) return cached;
@@ -51,9 +60,23 @@ export async function resolveYouTubeTrack(artist: string, title: string): Promis
 
   const promise = (async () => {
     try {
+      // Inside the Android shell the phone resolves it itself, on its own IP.
+      if (hasNativeYouTube()) {
+        const native = await nativeSearchVideoId(artist, title, durationSeconds);
+        if (!native.value) {
+          lastError = `device search: ${native.error ?? 'no video id'}`;
+          return null;
+        }
+        const result: YouTubeResult = { videoId: native.value, title: `${artist} - ${title}` };
+        lastError = null;
+        memoryCache.set(key, result);
+        persistCache();
+        return result;
+      }
+
       const url = `/api/youtube/track?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`;
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) { lastError = `search api: HTTP ${res.status}`; return null; }
       const data = (await res.json()) as YouTubeResult;
       if (data?.videoId) {
         memoryCache.set(key, data);
@@ -62,6 +85,7 @@ export async function resolveYouTubeTrack(artist: string, title: string): Promis
       }
       return null;
     } catch (err) {
+      lastError = err instanceof Error ? err.message : 'search failed';
       console.warn('[YouTube resolver] Error resolving track:', err);
       return null;
     } finally {

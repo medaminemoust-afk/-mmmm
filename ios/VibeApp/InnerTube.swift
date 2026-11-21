@@ -44,8 +44,11 @@ final class InnerTube {
 
     // MARK: - Public answers (JSON strings, same shape as the Java bridge)
 
-    /// First video id YouTube returns for a free-text query.
-    func searchJSON(_ query: String) -> String {
+    /// The video id that actually holds this song, for a free-text query.
+    ///
+    /// `expectedSeconds` is the catalog length of the track. Without it YouTube's first result can
+    /// be a slowed take, a loop or a compilation, which is how a 4:03 song ends up playing 8:14.
+    func searchJSON(_ query: String, expectedSeconds: Int = 0) -> String {
         var reasons: [String] = []
         for client in clients {
             let body = "{\"context\":{\"client\":\(clientJSON(client))},\"query\":\(quoted(query))}"
@@ -54,13 +57,112 @@ final class InnerTube {
                 continue
             }
             rememberVisitor(text)
-            if let id = firstMatch(text, pattern: "\"(?:compact)?[vV]ideoRenderer\":\\{\"videoId\":\"([A-Za-z0-9_-]{11})\"")
-                ?? firstMatch(text, pattern: "\"videoId\":\"([A-Za-z0-9_-]{11})\"") {
+            if let chosen = bestVideo(in: text, query: query, expectedSeconds: expectedSeconds) {
+                return json(["videoId": chosen.id, "client": client.name, "duration": chosen.seconds])
+            }
+            if let id = firstMatch(text, pattern: "\"videoId\":\"([A-Za-z0-9_-]{11})\"") {
                 return json(["videoId": id, "client": client.name])
             }
             reasons.append("\(client.name) no results")
         }
         return failure(reasons)
+    }
+
+    // MARK: - Choosing the right upload
+
+    private struct Candidate {
+        let id: String
+        let title: String
+        let seconds: Int
+    }
+
+    /// Uploads that are not the song itself. A query that asks for one of them keeps it.
+    private static let otherVersions = [
+        "remix", "sped up", "spedup", "slowed", "nightcore", "8d", "1 hour", "hour loop",
+        "loop", "extended", "instrumental", "karaoke", "reaction", "cover", "mashup",
+        "full album", "playlist", "reverb", "bass boosted", "acapella", "tribute", "compilation",
+    ]
+
+    private func bestVideo(in text: String, query: String, expectedSeconds: Int) -> Candidate? {
+        let all = candidates(in: text)
+        guard !all.isEmpty else { return nil }
+        let asked = query.lowercased()
+        let clean = all.filter { !Self.isOtherVersion($0.title, asked: asked) }
+        var pool = clean.isEmpty ? all : clean
+
+        if expectedSeconds > 0 {
+            let tolerance = max(20, Int(Double(expectedSeconds) * 0.15))
+            let near = pool.filter { abs($0.seconds - expectedSeconds) <= tolerance }
+            if !near.isEmpty {
+                pool = near
+            } else if let closest = pool.min(by: { abs($0.seconds - expectedSeconds) < abs($1.seconds - expectedSeconds) }) {
+                pool = [closest]
+            }
+        }
+
+        let words = Set(asked.split(separator: " ").map(String.init).filter { $0.count > 2 })
+        var best: Candidate?
+        var bestScore = Int.min
+        for candidate in pool {
+            let title = candidate.title.lowercased()
+            let hits = words.filter { title.contains($0) }.count
+            let delta = expectedSeconds > 0 ? abs(candidate.seconds - expectedSeconds) : 0
+            let score = hits * 1000 - delta
+            if score > bestScore {
+                bestScore = score
+                best = candidate
+            }
+        }
+        return best
+    }
+
+    private static func isOtherVersion(_ title: String, asked: String) -> Bool {
+        let lower = title.lowercased()
+        return otherVersions.contains { lower.contains($0) && !asked.contains($0) }
+    }
+
+    /// Every result YouTube returned, with its real length.
+    private func candidates(in text: String) -> [Candidate] {
+        guard let data = text.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        var found: [Candidate] = []
+        var seen = Set<String>()
+        func walk(_ node: Any) {
+            if let list = node as? [Any] {
+                for item in list { walk(item) }
+                return
+            }
+            guard let dict = node as? [String: Any] else { return }
+            if let id = dict["videoId"] as? String, id.count == 11,
+               let length = dict["lengthText"] as? [String: Any],
+               let label = length["simpleText"] as? String,
+               let seconds = Self.seconds(label),
+               seen.insert(id).inserted {
+                found.append(Candidate(id: id, title: Self.videoTitle(dict), seconds: seconds))
+            }
+            for value in dict.values { walk(value) }
+        }
+        walk(root)
+        return found
+    }
+
+    private static func videoTitle(_ renderer: [String: Any]) -> String {
+        guard let title = renderer["title"] as? [String: Any] else { return "" }
+        if let text = title["simpleText"] as? String { return text }
+        if let runs = title["runs"] as? [[String: Any]] {
+            return runs.compactMap { $0["text"] as? String }.joined()
+        }
+        return ""
+    }
+
+    /// "4:03" or "1:02:03" to seconds.
+    private static func seconds(_ label: String) -> Int? {
+        let parts = label.split(separator: ":").compactMap { Int($0) }
+        switch parts.count {
+        case 2: return parts[0] * 60 + parts[1]
+        case 3: return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        default: return nil
+        }
     }
 
     /// Direct audio-only URL for a video id.
