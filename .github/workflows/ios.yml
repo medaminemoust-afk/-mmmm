@@ -95,9 +95,17 @@ jobs:
         run: |
           cd ios
           TAG="ios-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" vibe-unsigned.ipa \
-            --repo "${{ github.repository }}" \
-            --title "vibe iOS unsigned IPA ($TAG)" \
-            --notes "Unsigned IPA built from ${{ github.sha }}. Install with Sideloadly and a free Apple ID." \
-            --latest
-          echo "asset: https://github.com/${{ github.repository }}/releases/download/$TAG/vibe-unsigned.ipa"
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$TAG" vibe-unsigned.ipa \
+              --repo "${{ github.repository }}" \
+              --title "vibe iOS unsigned IPA ($TAG)" \
+              --notes "Unsigned IPA built from ${{ github.sha }}. Install with Sideloadly and a free Apple ID." \
+              --latest; then
+              echo "asset: https://github.com/${{ github.repository }}/releases/download/$TAG/vibe-unsigned.ipa"
+              exit 0
+            fi
+            echo "release attempt ${attempt} failed (GitHub answered an error); retrying in 25s"
+            sleep 25
+          done
+          echo "the IPA was built and uploaded as an artifact, but GitHub refused to publish the release"
+          exit 1
