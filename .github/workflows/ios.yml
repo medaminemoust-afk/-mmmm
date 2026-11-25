@@ -89,7 +89,27 @@ jobs:
           if-no-files-found: error
 
       # A public release asset can be downloaded from the download page without a GitHub token.
+      # A plain branch is the reliable way off the runner without an API key: raw.githubusercontent
+      # serves it to the download site, and the build no longer depends on the release API.
+      - name: Publish the IPA on the ipa branch
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          rm -rf ipa && mkdir ipa && cd ipa
+          git init -q
+          git config user.name "vibe ci"
+          git config user.email "ci@vibe.invalid"
+          cp "$GITHUB_WORKSPACE/ios/vibe-unsigned.ipa" vibe-1.8.9-unsigned.ipa
+          git add vibe-1.8.9-unsigned.ipa
+          git commit -q -m "vibe iOS unsigned IPA ${GITHUB_RUN_NUMBER}"
+          git branch -M ipa
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          git push -f origin ipa
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Publish the IPA as a release asset
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
