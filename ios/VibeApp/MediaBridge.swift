@@ -13,6 +13,7 @@ final class MediaBridge {
     var evaluate: ((String) -> Void)?
 
     private var started = false
+    private var observers: [NSObjectProtocol] = []
 
     private init() {}
 
@@ -24,32 +25,66 @@ final class MediaBridge {
         try? session.setCategory(.playback, mode: .default)
         try? session.setActive(true)
 
-        let center = MPRemoteCommandCenter.shared()
-        center.playCommand.addTarget { _ in
+        // Taking the AirPods out, or switching Bluetooth off, moves the sound to the phone's own
+        // speaker. iOS does that for Safari but not for a WKWebView, so the shell stops the song
+        // itself: the page pauses where it is, and the lock screen follows.
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: session, queue: .main
+        ) { note in
+            guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable
+            else { return }
+            MediaBridge.shared.pauseForRouteLoss()
+        })
+        // A call, Siri or another app taking the session: pause instead of coming back playing.
+        observers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: session, queue: .main
+        ) { note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began
+            else { return }
+            MediaBridge.shared.pauseForRouteLoss()
+        })
+
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.addTarget { _ in
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.play && window.__vibeMedia.play();")
             return .success
         }
-        center.pauseCommand.addTarget { _ in
+        commands.pauseCommand.addTarget { _ in
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.pause && window.__vibeMedia.pause();")
             return .success
         }
-        center.togglePlayPauseCommand.addTarget { _ in
+        commands.togglePlayPauseCommand.addTarget { _ in
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.toggle && window.__vibeMedia.toggle();")
             return .success
         }
-        center.nextTrackCommand.addTarget { _ in
+        commands.nextTrackCommand.addTarget { _ in
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.next && window.__vibeMedia.next();")
             return .success
         }
-        center.previousTrackCommand.addTarget { _ in
+        commands.previousTrackCommand.addTarget { _ in
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.previous && window.__vibeMedia.previous();")
             return .success
         }
-        center.changePlaybackPositionCommand.addTarget { event in
+        commands.changePlaybackPositionCommand.addTarget { event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             let seconds = String(format: "%.2f", event.positionTime)
             MediaBridge.shared.evaluate?("window.__vibeMedia && window.__vibeMedia.seek && window.__vibeMedia.seek(\(seconds));")
             return .success
+        }
+    }
+
+    /// The audio route disappeared while something was playing: pause, never rewind, never
+    /// resume on its own, so putting the AirPods back in continues the same song.
+    private func pauseForRouteLoss() {
+        evaluate?("window.__vibeMedia && window.__vibeMedia.pause && window.__vibeMedia.pause();")
+        // The page's next nowPlaying() would say the same a moment later; this keeps the lock
+        // screen from showing a playing song in between.
+        if var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
+            info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 
